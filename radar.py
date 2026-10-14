@@ -22,6 +22,12 @@ def connect():
     db.execute('CREATE INDEX IF NOT EXISTS obs_token_time ON observations(token, observed_at)')
     db.execute('''CREATE TABLE IF NOT EXISTS alerts (
         id INTEGER PRIMARY KEY, observed_at TEXT, token TEXT, message TEXT)''')
+    for name in ('token_name', 'token_symbol', 'token_icon'):
+        try:
+            db.execute(f'ALTER TABLE observations ADD COLUMN {name} TEXT')
+        except sqlite3.OperationalError:
+            pass
+    db.commit()
     return db
 
 def narrative(profile):
@@ -75,13 +81,18 @@ def scan(db, limit=20):
         h1 = tx.get('h1') or {}
         liquidity = (pair or {}).get('liquidity') or {}
         volume = (pair or {}).get('volume') or {}
+        base = (pair or {}).get('baseToken') or {}
+        quote = (pair or {}).get('quoteToken') or {}
+        identity = base if base.get('address') == token else quote if quote.get('address') == token else {}
+        info = (pair or {}).get('info') or {}
+        icon = info.get('imageUrl') or p.get('icon')
         db.execute('''INSERT INTO observations
-            (observed_at,token,pair,created_at,liquidity_usd,volume_h1,txns_h1,price_usd,fdv,narrative,risk_flags,source)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+            (observed_at,token,pair,created_at,liquidity_usd,volume_h1,txns_h1,price_usd,fdv,narrative,risk_flags,source,token_name,token_symbol,token_icon)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
             (now,token,(pair or {}).get('pairAddress'),(pair or {}).get('pairCreatedAt'),
              liquidity.get('usd'),volume.get('h1'),int(h1.get('buys') or 0)+int(h1.get('sells') or 0),
              float((pair or {}).get('priceUsd') or 0) or None,(pair or {}).get('fdv'),
-             narrative(p),json.dumps(flags),'DexScreener public API'))
+             narrative(p),json.dumps(flags),'DexScreener public API',identity.get('name'),identity.get('symbol'),icon))
         if not exists:
             msg = f'NEW PROFILE {token} | narrative={narrative(p)} | flags={"; ".join(flags)}'
             print('[RESEARCH ALERT]', msg)

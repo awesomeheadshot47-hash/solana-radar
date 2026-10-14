@@ -33,7 +33,7 @@ if st.button('🔄 Scan recent Solana profiles', type='primary', use_container_w
 try:
     db = connect()
     obs = db.execute('''SELECT o.token,o.observed_at,o.created_at,o.liquidity_usd,o.volume_h1,
-      o.txns_h1,o.narrative,o.risk_flags,o.price_usd,o.pair
+      o.txns_h1,o.narrative,o.risk_flags,o.price_usd,o.pair,o.token_name,o.token_symbol,o.token_icon
       FROM observations o JOIN (SELECT token,MAX(id) AS id FROM observations GROUP BY token) latest
       ON o.id=latest.id ORDER BY o.id DESC LIMIT 100''').fetchall()
     alerts = db.execute('SELECT observed_at,token,message FROM alerts ORDER BY id DESC LIMIT 30').fetchall()
@@ -49,9 +49,13 @@ tab1,tab2,tab3=st.tabs(['Discoveries','Alerts','Methods'])
 with tab1:
     if not obs:
         st.info('No observations yet. Tap “Scan recent Solana profiles” to begin.')
-    for token, observed, created, liq, vol, txns, theme, flags, price, pair in obs:
+    for token, observed, created, liq, vol, txns, theme, flags, price, pair, name, symbol, icon in obs:
         flags=json.loads(flags or '[]')
-        with st.expander(f'{token[:7]}…{token[-5:]}  ·  {theme or "Unclassified"}'):
+        with st.expander(f'{name or "Name unavailable"} ({symbol or "?"}) · {theme or "Unclassified"}'):
+            if icon and isinstance(icon, str) and icon.startswith('https://'):
+                st.image(icon, width=72)
+            st.write(f'**Name:** {name or "Unavailable"}  |  **Ticker:** {symbol or "Unavailable"}')
+            st.caption('Names, symbols and logos are third-party metadata and may be misleading or missing.')
             a,b=st.columns(2)
             a.metric('Liquidity (observed)', f'${liq:,.0f}' if liq is not None else 'Unknown')
             b.metric('1h volume', f'${vol:,.0f}' if vol is not None else 'Unknown')
